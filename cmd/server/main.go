@@ -29,7 +29,7 @@ func updateMetric(res http.ResponseWriter, req *http.Request) {
 	metricValue := req.PathValue("metricValue")
 
 	// Check method
-	if req.Method == http.MethodPost {
+	if req.Method != http.MethodPost {
 		http.Error(res, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
