@@ -6,8 +6,6 @@ import (
 )
 
 type MemStorageFuncs interface {
-	getCounter()
-	getGauge()
 	setCounter()
 	setGauge()
 }
@@ -15,14 +13,6 @@ type MemStorageFuncs interface {
 type MemStorage struct {
 	counter map[string]int64
 	gauge   map[string]float64
-}
-
-func (memStorage MemStorage) getCounter(name string) int64 {
-	return memStorage.counter[name]
-}
-
-func (memStorage MemStorage) getGauge(name string) float64 {
-	return memStorage.gauge[name]
 }
 
 func (memStorage MemStorage) setCounter(name string, value int64) {
@@ -34,50 +24,60 @@ func (memStorage MemStorage) setGauge(name string, value float64) {
 }
 
 func updateMetric(res http.ResponseWriter, req *http.Request) {
-	if req.Method != http.MethodPost {
-		metricType := req.PathValue("metricType")
-		metricName := req.PathValue("metricName")
-		metricValue := req.PathValue("metricValue")
+	metricType := req.PathValue("metricType")
+	metricName := req.PathValue("metricName")
+	metricValue := req.PathValue("metricValue")
 
-		if metricType == "counter" || metricType == "gauge" {
-			if metricName == "" {
-				res.WriteHeader(http.StatusNotFound)
-				return
-			} else {
+	// Check method
+	if req.Method == http.MethodPost {
+		http.Error(res, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
 
-				if metricType == "counter" {
-					_, err := strconv.Atoi(metricValue)
-					if err == nil {
-						//
-					} else {
-						res.WriteHeader(http.StatusBadRequest)
-						return
-					}
-				} else {
-					_, err := strconv.ParseFloat(metricValue, 64)
-					if err == nil {
-						//
-					} else {
-						res.WriteHeader(http.StatusBadRequest)
-						return
-					}
-				}
+	// Check type
+	if metricType != "counter" && metricType != "gauge" {
+		res.WriteHeader(http.StatusBadRequest)
+		return
+	}
 
-				res.Header().Set("content-type", "text/plain; charset=utf-8")
-				res.WriteHeader(http.StatusOK)
-			}
+	// Check name
+	if metricName == "" {
+		res.WriteHeader(http.StatusNotFound)
+		return
+	}
+
+	if metricType == "counter" {
+		// Check and set value
+		value, err := strconv.ParseInt(metricValue, 10, 64)
+		if err == nil {
+			currentMemStorage.setCounter(metricName, value)
 		} else {
 			res.WriteHeader(http.StatusBadRequest)
 			return
 		}
-		return
 	} else {
-		http.Error(res, "Method not allowed", http.StatusMethodNotAllowed)
-		return
+		// Check and set value
+		value, err := strconv.ParseFloat(metricValue, 64)
+		if err == nil {
+			currentMemStorage.setGauge(metricName, value)
+		} else {
+			res.WriteHeader(http.StatusBadRequest)
+			return
+		}
 	}
+
+	res.Header().Set("content-type", "text/plain; charset=utf-8")
+	res.WriteHeader(http.StatusOK)
 }
 
+var currentMemStorage MemStorage
+
 func main() {
+	// Init MemStorage
+	currentMemStorage.counter = make(map[string]int64)
+	currentMemStorage.gauge = make(map[string]float64)
+
+	// Init server
 	mux := http.NewServeMux()
 	mux.HandleFunc(`/update/{metricType}/{metricName}/{metricValue}`, updateMetric)
 
